@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.local
+*.log
+combined.log
+error.log
+.DS_Store

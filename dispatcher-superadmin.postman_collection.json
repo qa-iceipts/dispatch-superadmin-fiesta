@@ -1,0 +1,192 @@
+{
+  "info": {
+    "name": "Dispatcher Superadmin (Platform-Admin Service)",
+    "description": "Platform-admin microservice — tenant registry, entitlements (gov-API pay-gate) & quotas.\n\nUsage order:\n1. Admin > Create Product (saves {{apiKey}} automatically)\n2. Integration > Upsert Tenant (saves {{tenantId}})\n3. Integration > Get Entitlement\n4. Admin > Mark Paid / Gov Access / Quota, then re-check entitlement.\n\nSet {{baseUrl}}, {{adminToken}}, {{productName}}, {{tenantRef}} in collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9000" },
+    { "key": "adminToken", "value": "change-me-superadmin-token" },
+    { "key": "productName", "value": "GVPR" },
+    { "key": "apiKey", "value": "" },
+    { "key": "tenantRef", "value": "32e28955-b3bb-4991-af8a-6997515e342e" },
+    { "key": "tenantId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health & Root",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (x-admin-token)",
+      "item": [
+        {
+          "name": "Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r && r.data && r.data.apiKey) {",
+                  "  pm.collectionVariables.set('apiKey', r.data.apiKey);",
+                  "  pm.collectionVariables.set('productName', r.data.name);",
+                  "  console.log('Saved apiKey for product', r.data.name);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-admin-token", "value": "{{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{productName}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/admin/products", "host": ["{{baseUrl}}"], "path": ["admin", "products"] }
+          }
+        },
+        {
+          "name": "List Tenants",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-admin-token", "value": "{{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tenants"]
+            }
+          }
+        },
+        {
+          "name": "Get Tenant",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-admin-token", "value": "{{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tenants", "{{tenantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Set Billing (mark paid)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "x-admin-token", "value": "{{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"billingStatus\": \"ACTIVE\",\n  \"paidUntil\": \"2027-03-31\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/admin/tenants/{{tenantId}}/billing",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tenants", "{{tenantId}}", "billing"]
+            }
+          }
+        },
+        {
+          "name": "Set Gov Access (override / suspend)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "x-admin-token", "value": "{{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"override\": null,\n  \"status\": \"ACTIVE\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/admin/tenants/{{tenantId}}/gov-access",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tenants", "{{tenantId}}", "gov-access"]
+            }
+          }
+        },
+        {
+          "name": "Set Quota (maxEmployees)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "x-admin-token", "value": "{{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"key\": \"maxEmployees\",\n  \"value\": 25\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/admin/tenants/{{tenantId}}/quota",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tenants", "{{tenantId}}", "quota"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration (x-product + x-api-key)",
+      "item": [
+        {
+          "name": "Upsert Tenant (onboard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r && r.data && r.data.tenantId) {",
+                  "  pm.collectionVariables.set('tenantId', r.data.tenantId);",
+                  "  console.log('Saved tenantId', r.data.tenantId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-product", "value": "{{productName}}" },
+              { "key": "x-api-key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"externalRef\": \"{{tenantRef}}\",\n  \"name\": \"GVPR Engineers Limited\"\n}" },
+            "url": { "raw": "{{baseUrl}}/v1/tenants", "host": ["{{baseUrl}}"], "path": ["v1", "tenants"] }
+          }
+        },
+        {
+          "name": "Get Entitlement",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-product", "value": "{{productName}}" },
+              { "key": "x-api-key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/entitlement?tenantRef={{tenantRef}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "entitlement"],
+              "query": [{ "key": "tenantRef", "value": "{{tenantRef}}" }]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
