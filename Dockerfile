@@ -36,5 +36,10 @@ USER node
 # Expose port
 EXPOSE 9000
 
+# Health check to monitor container health using the built-in HTTP module (avoids installing curl/wget)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 9000) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"
+
 # Execute node directly (PID 1) to ensure proper forwarding of SIGTERM/SIGINT signals
 CMD ["node", "server.js"]
+
