@@ -36,6 +36,20 @@ router.post(
   PromiseHandler(sendResDL)
 );
 
+// GVPR compatibility endpoints
+router.post(
+  "/vehicle-rc",
+  resolveTenantEntitlement,
+  meterUsage("VAHAN_RC"),
+  PromiseHandler(sendResVehicle)
+);
+router.post(
+  "/getVehicleDetails",
+  resolveTenantEntitlement,
+  meterUsage("VAHAN_DL"),
+  PromiseHandler(sendResDL)
+);
+
 // Save to local cache.
 router.post("/save-vehicle", PromiseHandler(vahanController.saveVehicleData));
 router.post("/save-driver", PromiseHandler(vahanController.saveDriverData));
