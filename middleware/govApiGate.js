@@ -72,4 +72,58 @@ function meterUsage(type) {
   };
 }
 
-module.exports = { resolveTenantEntitlement, meterUsage };
+/**
+ * Meter a LOCAL DB search (the pre-VAHAN "is this vehicle/driver already in our
+ * DB?" lookup). Unlike gov-API calls these are NOT gated (they're free) — but we
+ * still count how many times each tenant hits them, separately from the gov-API
+ * counters. The tenant is soft-resolved (auto-onboarded TRIAL if new) so the
+ * search is never blocked. Counts every call with an `x-tenant-ref`, including
+ * "not found" (404) — because that's still a search the tenant performed.
+ */
+function meterDbSearch(type) {
+  return async (req, res, next) => {
+    try {
+      const tenantRef =
+        req.header("x-tenant-ref") || req.body?.tenantRef || req.query?.tenantRef;
+      if (tenantRef) {
+        let tenant = await db.tenant.findOne({
+          where: { productId: req.product.id, externalRef: String(tenantRef) },
+        });
+        if (!tenant) {
+          tenant = await db.tenant.create({
+            productId: req.product.id,
+            externalRef: String(tenantRef),
+            status: "ACTIVE",
+          });
+          await db.subscription.create({
+            tenantId: tenant.id,
+            billingStatus: "TRIAL",
+          });
+        }
+        req.tenant = tenant;
+      }
+    } catch (e) {
+      console.error("[meterDbSearch] tenant resolve failed:", e.message);
+    }
+    res.on("finish", () => {
+      // Count any non-server-error response (200 found, 404 not-found) as a search.
+      if (req.tenant && res.statusCode < 500) {
+        db.usageEvent
+          .create({
+            tenantId: req.tenant.id,
+            productId: req.product.id,
+            type,
+            ref: req.params?.vehicleNumber || req.params?.dlNumber || null,
+            status:
+              res.statusCode >= 200 && res.statusCode < 300
+                ? "FOUND"
+                : "NOT_FOUND",
+          })
+          .catch((e) => console.error("[meterDbSearch] failed:", e.message));
+      }
+    });
+    next();
+  };
+}
+
+module.exports = { resolveTenantEntitlement, meterUsage, meterDbSearch };

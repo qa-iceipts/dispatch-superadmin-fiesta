@@ -9,6 +9,27 @@ const {
   deriveGovApiAccess,
 } = require("../services/entitlement.service");
 
+/** apiserver base + serverKey (throws a clean 424 if not configured). */
+function apiserverCreds() {
+  const base = process.env.APISERVER_URL;
+  const serverKey = process.env.APISERVER_SERVER_KEY;
+  if (!base || !serverKey) {
+    throw new createHttpError.FailedDependency(
+      "APISERVER_URL / APISERVER_SERVER_KEY not configured on the superadmin service"
+    );
+  }
+  return { base: base.replace(/\/+$/, ""), serverKey };
+}
+/** Normalize an axios error from the apiserver into an http-error. */
+function proxyError(err, fallback) {
+  const status = (err.response && err.response.status) || 502;
+  const message =
+    (err.response && err.response.data && err.response.data.error_message) ||
+    err.message ||
+    fallback;
+  return new createHttpError(status, message);
+}
+
 module.exports = {
   /**
    * POST /admin/clients — create a real, APPROVED mine login by proxying to the
@@ -61,6 +82,227 @@ module.exports = {
         (err.response && err.response.data && err.response.data.error_message) ||
         err.message ||
         "Failed to create client";
+      throw new createHttpError(status, message);
+    }
+  },
+
+  /**
+   * GET /admin/clients/:userId/stats?from=&to= — per-mine operational stats
+   * (loading slips, vehicle in/out, material out, e-Way). Proxies to transport
+   * (serverKey). Read-only.
+   */
+  getClientStats: async (req, res) => {
+    const base = process.env.TRANSPORT_URL;
+    const serverKey =
+      process.env.TRANSPORT_SERVER_KEY || process.env.APISERVER_SERVER_KEY;
+    if (!base || !serverKey) {
+      throw new createHttpError.FailedDependency(
+        "TRANSPORT_URL / server key not configured on the superadmin service"
+      );
+    }
+    try {
+      const { data } = await axios.get(
+        `${base.replace(/\/+$/, "")}/loadingSlip/mineStatsForServer/${req.params.userId}`,
+        {
+          headers: { "x-server-key": serverKey },
+          params: { from: req.query.from, to: req.query.to },
+        }
+      );
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to load client stats");
+    }
+  },
+
+  // ── Feature/Permission CATALOGUE (create features + sub-module permissions) ──
+  /** GET /admin/catalog — full feature→permission catalogue. */
+  listCatalog: async (req, res) => {
+    const { base, serverKey } = apiserverCreds();
+    try {
+      const { data } = await axios.get(`${base}/inventory/catalog`, {
+        params: { server: "inventory", serverKey },
+      });
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to load catalogue");
+    }
+  },
+  /** POST /admin/catalog/features — create a feature. Body: { featureName, displayName }. */
+  createCatalogFeature: async (req, res) => {
+    const { base, serverKey } = apiserverCreds();
+    try {
+      const { data } = await axios.post(`${base}/inventory/catalog/feature`, {
+        server: "inventory",
+        serverKey,
+        featureName: req.body.featureName,
+        displayName: req.body.displayName,
+      });
+      return res.status(201).json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to create feature");
+    }
+  },
+  /** POST /admin/catalog/permissions — create a sub-module permission under a feature. */
+  createCatalogPermission: async (req, res) => {
+    const { base, serverKey } = apiserverCreds();
+    try {
+      const { data } = await axios.post(`${base}/inventory/catalog/permission`, {
+        server: "inventory",
+        serverKey,
+        featureId: req.body.featureId,
+        permissionName: req.body.permissionName,
+        display: req.body.display,
+        roleNames: req.body.roleNames,
+      });
+      return res.status(201).json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to create permission");
+    }
+  },
+  /** PUT /admin/catalog/features/:id — edit feature display name. */
+  updateCatalogFeature: async (req, res) => {
+    const { base, serverKey } = apiserverCreds();
+    try {
+      const { data } = await axios.post(`${base}/inventory/catalog/feature/update`, {
+        server: "inventory",
+        serverKey,
+        id: req.params.id,
+        displayName: req.body.displayName,
+      });
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to update feature");
+    }
+  },
+  /** PUT /admin/catalog/permissions/:id — edit permission display name. */
+  updateCatalogPermission: async (req, res) => {
+    const { base, serverKey } = apiserverCreds();
+    try {
+      const { data } = await axios.post(`${base}/inventory/catalog/permission/update`, {
+        server: "inventory",
+        serverKey,
+        id: req.params.id,
+        display: req.body.display,
+      });
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      throw proxyError(err, "Failed to update permission");
+    }
+  },
+
+  /**
+   * GET /admin/clients/:userId/permissions — the mine's feature→sub-module tree
+   * + its current permission ceiling. Proxies to apiserver (serverKey).
+   */
+  getClientPermissions: async (req, res) => {
+    const apiBase = process.env.APISERVER_URL;
+    const serverKey = process.env.APISERVER_SERVER_KEY;
+    if (!apiBase || !serverKey) {
+      throw new createHttpError.FailedDependency(
+        "APISERVER_URL / APISERVER_SERVER_KEY not configured on the superadmin service"
+      );
+    }
+    try {
+      const { data } = await axios.get(
+        `${apiBase.replace(/\/+$/, "")}/inventory/minePermissions/${req.params.userId}`,
+        { params: { server: "inventory", serverKey } }
+      );
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      const status = (err.response && err.response.status) || 502;
+      const message =
+        (err.response && err.response.data && err.response.data.error_message) ||
+        err.message ||
+        "Failed to load permissions";
+      throw new createHttpError(status, message);
+    }
+  },
+
+  /**
+   * PUT /admin/clients/:userId/permissions — replace the mine's permission
+   * ceiling. Body: { permissions: [{permissionId, create, modify, read, delete}] }.
+   * Proxies to apiserver (POST, serverKey in body).
+   */
+  setClientPermissions: async (req, res) => {
+    const apiBase = process.env.APISERVER_URL;
+    const serverKey = process.env.APISERVER_SERVER_KEY;
+    if (!apiBase || !serverKey) {
+      throw new createHttpError.FailedDependency(
+        "APISERVER_URL / APISERVER_SERVER_KEY not configured on the superadmin service"
+      );
+    }
+    const permissions = Array.isArray(req.body.permissions)
+      ? req.body.permissions
+      : [];
+    try {
+      const { data } = await axios.post(
+        `${apiBase.replace(/\/+$/, "")}/inventory/minePermissions/${req.params.userId}`,
+        { server: "inventory", serverKey, permissions }
+      );
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      const status = (err.response && err.response.status) || 502;
+      const message =
+        (err.response && err.response.data && err.response.data.error_message) ||
+        err.message ||
+        "Failed to save permissions";
+      throw new createHttpError(status, message);
+    }
+  },
+
+  /**
+   * GET /admin/clients/:userId/features — the feature catalogue + which ones the
+   * mine has enabled. Proxies to apiserver (serverKey).
+   */
+  getClientFeatures: async (req, res) => {
+    const apiBase = process.env.APISERVER_URL;
+    const serverKey = process.env.APISERVER_SERVER_KEY;
+    if (!apiBase || !serverKey) {
+      throw new createHttpError.FailedDependency(
+        "APISERVER_URL / APISERVER_SERVER_KEY not configured on the superadmin service"
+      );
+    }
+    try {
+      const { data } = await axios.get(
+        `${apiBase.replace(/\/+$/, "")}/inventory/mineFeatures/${req.params.userId}`,
+        { params: { server: "inventory", serverKey } }
+      );
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      const status = (err.response && err.response.status) || 502;
+      const message =
+        (err.response && err.response.data && err.response.data.error_message) ||
+        err.message ||
+        "Failed to load features";
+      throw new createHttpError(status, message);
+    }
+  },
+
+  /**
+   * PUT /admin/clients/:userId/features — replace the mine's enabled feature set.
+   * Body: { featureIds: [...] }. Proxies to apiserver (POST, serverKey in body).
+   */
+  setClientFeatures: async (req, res) => {
+    const apiBase = process.env.APISERVER_URL;
+    const serverKey = process.env.APISERVER_SERVER_KEY;
+    if (!apiBase || !serverKey) {
+      throw new createHttpError.FailedDependency(
+        "APISERVER_URL / APISERVER_SERVER_KEY not configured on the superadmin service"
+      );
+    }
+    const featureIds = Array.isArray(req.body.featureIds) ? req.body.featureIds : [];
+    try {
+      const { data } = await axios.post(
+        `${apiBase.replace(/\/+$/, "")}/inventory/mineFeatures/${req.params.userId}`,
+        { server: "inventory", serverKey, featureIds }
+      );
+      return res.json({ success: true, data: data && data.data ? data.data : data });
+    } catch (err) {
+      const status = (err.response && err.response.status) || 502;
+      const message =
+        (err.response && err.response.data && err.response.data.error_message) ||
+        err.message ||
+        "Failed to save features";
       throw new createHttpError(status, message);
     }
   },

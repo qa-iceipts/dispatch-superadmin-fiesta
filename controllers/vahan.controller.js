@@ -1,42 +1,58 @@
 const createHttpError = require('http-errors');
 const logger = require('../helpers/logger');
-const { drivers, staticVehicleData } = require('../models');
+const { drivers, staticVehicleData, vehicleMaster, driverMaster } = require('../models');
 // Live VAHAN/DL validation is handled by services/vahanApis (enc/rcEnc) wired
 // directly in the routes; this controller only does local DB cache get/save.
 
 /**
- * Get vehicle RC details from local database
+ * Get vehicle RC details from the local DB — the pre-VAHAN lookup. Checks the
+ * superadmin-managed registry (vehicleMaster, CSV-imported fleet) first, then
+ * the VAHAN response cache (staticVehicleData). Returns the row with a `_source`
+ * tag. 404 if neither has it (caller then falls back to the live VAHAN API).
  */
 exports.getVehicleFromDB = async (req, res, next) => {
-
   const { vehicleNumber } = req.params;
 
-  const vehicle = await staticVehicleData.findOne({
-    where: { truckNo: vehicleNumber }
-  });
+  let vehicle = await vehicleMaster.findOne({ where: { truckNo: vehicleNumber } });
+  let source = 'registry';
+  if (!vehicle) {
+    vehicle = await staticVehicleData.findOne({ where: { truckNo: vehicleNumber } });
+    source = 'vahan_cache';
+  }
 
   if (!vehicle) {
     throw new createHttpError.NotFound('Vehicle not found in local database');
   }
 
-  return res.sendResponse(vehicle, 'Vehicle found in local database');
+  return res.sendResponse(
+    { ...vehicle.toJSON(), _source: source },
+    'Vehicle found in local database'
+  );
 };
 
 /**
- * Get driver DL details from local database
+ * Get driver DL details from the local DB — the pre-VAHAN lookup. Checks the
+ * superadmin-managed registry (driverMaster) first, then the VAHAN DL cache
+ * (drivers). 404 if neither (caller then falls back to the live VAHAN DL API).
  */
 exports.getDriverFromDB = async (req, res, next) => {
   const { dlNumber } = req.params;
 
-  const driver = await drivers.findOne({
-    where: { dlNumber }
-  });
+  let driver = await driverMaster.findOne({ where: { dlNumber } });
+  let source = 'registry';
+  if (!driver) {
+    driver = await drivers.findOne({ where: { dlNumber } });
+    source = 'vahan_cache';
+  }
 
   if (!driver) {
     throw new createHttpError.NotFound('Driver not found in local database');
   }
 
-  return res.sendResponse(driver, 'Driver found in local database');
+  return res.sendResponse(
+    { ...driver.toJSON(), _source: source },
+    'Driver found in local database'
+  );
 };
 
 /**

@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { PromiseHandler } = require("../middleware/error.handler");
 const apiKeyAuth = require("../middleware/apiKeyAuth");
-const { resolveTenantEntitlement, meterUsage } = require("../middleware/govApiGate");
+const { resolveTenantEntitlement, meterUsage, meterDbSearch } = require("../middleware/govApiGate");
 const vahanController = require("../controllers/vahan.controller");
 const sendResVehicle = require("../services/vahanApis/rcEnc"); // POST /validate-vehicle
 const sendResDL = require("../services/vahanApis/enc"); // POST /validate-dl
@@ -11,9 +11,16 @@ const sendResDL = require("../services/vahanApis/enc"); // POST /validate-dl
 // All VAHAN routes are server-to-server (product backends) — require apiKey.
 router.use(apiKeyAuth);
 
-// Local DB cache lookups (no gov call, no metering, no gating).
-router.get("/vehicle/:vehicleNumber", PromiseHandler(vahanController.getVehicleFromDB));
-router.get("/driver/:dlNumber", PromiseHandler(vahanController.getDriverFromDB));
+router.get(
+  "/vehicle/:vehicleNumber",
+  meterDbSearch("VEHICLE_DB_SEARCH"),
+  PromiseHandler(vahanController.getVehicleFromDB)
+);
+router.get(
+  "/driver/:dlNumber",
+  meterDbSearch("DRIVER_DB_SEARCH"),
+  PromiseHandler(vahanController.getDriverFromDB)
+);
 
 // Live government-API validations — entitlement-gated AT THE SOURCE + metered.
 router.post(

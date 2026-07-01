@@ -16,6 +16,21 @@ router.get("/usage", PromiseHandler(d.getUsageAnalytics));
 
 // Clients (real mine logins, created via apiserver — auto-approved, no OTP)
 router.post("/clients", PromiseHandler(c.createClient));
+// Per-mine feature/module entitlement (managed from superadmin)
+router.get("/clients/:userId/features", PromiseHandler(c.getClientFeatures));
+router.put("/clients/:userId/features", PromiseHandler(c.setClientFeatures));
+// Per-mine operational stats dashboard (loading slips, vehicle/material out)
+router.get("/clients/:userId/stats", PromiseHandler(c.getClientStats));
+// Per-mine permission ceiling (sub-module + CRUD within enabled features)
+router.get("/clients/:userId/permissions", PromiseHandler(c.getClientPermissions));
+router.put("/clients/:userId/permissions", PromiseHandler(c.setClientPermissions));
+
+// Feature/permission catalogue management (create features + sub-modules)
+router.get("/catalog", PromiseHandler(c.listCatalog));
+router.post("/catalog/features", PromiseHandler(c.createCatalogFeature));
+router.post("/catalog/permissions", PromiseHandler(c.createCatalogPermission));
+router.put("/catalog/features/:id", PromiseHandler(c.updateCatalogFeature));
+router.put("/catalog/permissions/:id", PromiseHandler(c.updateCatalogPermission));
 
 // Products
 router.post("/products", PromiseHandler(c.createProduct));

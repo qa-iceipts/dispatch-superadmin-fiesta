@@ -243,15 +243,20 @@ async function sendReq(encryptedData, result, keyENC1) {
     return responseData;
   } catch (error) {
     console.error("Error:", error);
-    if (error.response) {
-      let responseData = await encDataFuciton(
-        error.response.data.symmetricKey,
-        error.response.data.data,
-        error.response.data.hash
-      );
-      console.log("encDataFuciton error response:", responseData);
-      return responseData;
+    if (error.response && error.response.data && error.response.data.symmetricKey) {
+      try {
+        let responseData = await encDataFuciton(
+          error.response.data.symmetricKey,
+          error.response.data.data,
+          error.response.data.hash
+        );
+        console.log("encDataFuciton error response:", responseData);
+        return responseData;
+      } catch (decErr) {
+        console.error("Failed to decrypt error response:", decErr.message);
+      }
     }
+    throw new Error(error.response?.data?.message || error.message || "Failed to make Vahan check request");
   }
 }
 
