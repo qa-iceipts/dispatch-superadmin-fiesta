@@ -279,12 +279,9 @@ async function sendRes(req, res, next) {
       plainSymmetricKeyReceived,
       JSON.stringify(plainText)
     );
-
-    // const plainSymmetricKey = "1234567890123456"; // Adjust key as needed
-    // const encryptedData = encrypt(plainText, plainSymmetricKey);
-    // const hash = calculateHmacSHA256(plainSymmetricKey, encryptedData);
-
+    
     const response = await sendReq(encryptedData, result,keyENC1); // Get the actual response from sendReq
+     console.log('[VAHAN DL] Response received>>>>>>>>>>:', response)
     console.log('[VAHAN DL] Response received:', response ? 'Yes' : 'No');
 
     // Save driver data to database if response is successful

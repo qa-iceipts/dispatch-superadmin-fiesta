@@ -10,7 +10,6 @@ const secretKey = process.env.VAHANSECRETKEY;
 
 // Create the Basic Auth header value
 const authHeader = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
-// SECURITY FIX: Removed console.log of auth header (contained base64 credentials)
 
 // Define the request payload
 const payload = qs.stringify({
@@ -26,8 +25,6 @@ async function getAuthToken(){
       },
     });
 
-    // SECURITY FIX: Removed console.log of token response (contained access_token)
-    // Safe: Only log non-sensitive metadata for debugging
     logger.debug('VAHAN auth token obtained', {
       service: 'vahan-auth',
       expiresIn: response.data?.expires_in,
@@ -35,13 +32,11 @@ async function getAuthToken(){
     });
     return response.data
   } catch (error) {
-    // Keep error logging but use logger instead of console
-    // BEHAVIOR PRESERVED: Original code logged error and returned undefined (no throw)
+
     logger.error('VAHAN auth failed', {
       service: 'vahan-auth',
       error: error.response?.data?.error || error.message
     });
-    // Note: Original returned undefined on error - preserving that behavior
   }
 }
 

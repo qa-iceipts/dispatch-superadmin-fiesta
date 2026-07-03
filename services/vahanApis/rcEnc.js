@@ -286,7 +286,7 @@ async function sendRes(req, res, next) {
       JSON.stringify(plainText)
     );
     const response = await sendReq(encryptedData, result, keyENC1); // Get the actual response from sendReq
-
+    console.log("[VAHAN RC] Decrypted response:", response);
     // Save vehicle data to database if response is successful
     if (response) {
       const savedVehicle = await saveVehicleData(response);
