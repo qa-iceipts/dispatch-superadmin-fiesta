@@ -262,10 +262,7 @@ async function sendReq(encryptedData, result, keyENC1) {
 
 async function sendRes(req, res, next) {
   try {
-    const plainText = {
-      consent: "Y",
-      ...req.body,
-    }; // Adjust as needed to match your request format
+    const plainText = req.body;
 
     var sskey = process.env.VAHANSSKEY;
     var sskeyBytes = Buffer.from(sskey, "utf8");
