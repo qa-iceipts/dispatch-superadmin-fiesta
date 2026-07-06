@@ -257,7 +257,8 @@ async function sendRes(req, res, next) {
   try {
     const plainText = {
       consent: "Y",
-      ...req.body,
+      dlNo: req.body.dlNo || req.body.dlNumber,
+      dob: req.body.dob,
     }; // Adjust as needed to match your request format
 
     var sskey = process.env.VAHANSSKEY;
