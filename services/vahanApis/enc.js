@@ -255,10 +255,23 @@ async function sendReq(encryptedData, result,keyENC1) {
 async function sendRes(req, res, next) {
   // return async (req, res, next) => {
   try {
+    let dob = req.body.dob;
+    if (dob) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        const [year, month, day] = dob.split("-");
+        dob = `${day}-${month}-${year}`;
+      } else {
+        const parsed = moment(dob);
+        if (parsed.isValid()) {
+          dob = parsed.format("DD-MM-YYYY");
+        }
+      }
+    }
+
     const plainText = {
       consent: "Y",
       dlNo: req.body.dlNo || req.body.dlNumber,
-      dob: req.body.dob,
+      dob: dob,
     }; // Adjust as needed to match your request format
 
     var sskey = process.env.VAHANSSKEY;
