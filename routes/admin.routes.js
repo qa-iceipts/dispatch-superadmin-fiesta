@@ -13,6 +13,7 @@ router.use(adminAuth);
 // Dashboard & analytics
 router.get("/dashboard", PromiseHandler(d.getDashboard));
 router.get("/usage", PromiseHandler(d.getUsageAnalytics));
+router.get("/vahan/stats", PromiseHandler(d.getVahanStats));
 
 // Clients (real mine logins, created via apiserver — auto-approved, no OTP)
 router.post("/clients", PromiseHandler(c.createClient));

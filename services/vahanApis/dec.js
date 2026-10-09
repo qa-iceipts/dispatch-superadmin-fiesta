@@ -77,12 +77,9 @@ let encDataFuciton = async (encryptedKEY, EncData, hash) => {
   );
 
   const decryptedData = decrypt(EncData, decryptedBytes.toString());
-  console.log("decodedData : " + decryptedData);
 
   const result = calculateHmacSHA256(decryptedBytes.toString(), decryptedData);
 
-  console.log("decodedKey : " + decryptedBytes.toString());
-  console.log("hash : " + result);
 
   if (result == hash) {
     console.log("hash matched");

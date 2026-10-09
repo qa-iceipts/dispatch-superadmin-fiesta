@@ -28,7 +28,17 @@ npm run start:dev      # creates the DB if missing, syncs models, listens on POR
 - `POST /v1/tenants` `{ externalRef, name?, metadata? }` — onboard/upsert a tenant (creates TRIAL subscription).
 - `GET /v1/entitlement?tenantRef=<externalRef>` — `{ govApiAccess, billingStatus, quotas }`. Unknown tenant ⇒ `govApiAccess:false`.
 
+### VAHAN gateway (product backends) — headers `x-product`, `x-api-key`, `x-tenant-ref`
+Live lookups are entitlement-gated per tenant and metered into `usageEvent`.
+- `GET /v1/vahan/vehicle/:vehicleNumber` · `GET /v1/vahan/driver/:dlNumber` — local registry/cache (free, `*_DB_SEARCH`).
+- `POST /v1/vahan/validate-vehicle` · `POST /v1/vahan/validate-dl` — Protean (`VAHAN_RC` / `VAHAN_DL`).
+- `POST /v1/vahan/vehicle-rc-surepass` `{ vehicleNumber }` — SurePass RC (`SUREPASS_RC`); rc-v2 with rc-full fallback.
+- `POST /v1/vahan/driver-dl-surepass` `{ dlNumber, dob }` — SurePass DL (`SUREPASS_DL`); dob as `YYYY-MM-DD` or `DD-MM-YYYY`.
+
+SurePass responses are `{ success, data: { data: <surepass payload> } }` — the same shape GVPR/GRM transport returns.
+
 ### Admin (superadmin console) — header `x-admin-token` (M1 placeholder)
+- `GET /admin/vahan/stats?from&to&productId&tenantId` — counts for every VAHAN-family API: totals, per calling product, per month, plus the global `providerMonthly` counters.
 - `POST /admin/products` `{ name }` → returns raw `apiKey` **once**.
 - `GET /admin/tenants` · `GET /admin/tenants/:id`
 - `PUT /admin/tenants/:id/billing` `{ billingStatus?, paidUntil? }` (mark paid)

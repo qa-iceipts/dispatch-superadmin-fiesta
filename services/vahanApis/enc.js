@@ -242,7 +242,7 @@ async function sendReq(encryptedData, result,keyENC1) {
           error.response.data.data,
           error.response.data.hash
         );
-        console.log("encDataFuciton error response:", responseData);
+        console.log("[VAHAN DL] error response received (body not logged — contains personal data)");
         return responseData;
       } catch (decErr) {
         console.error("Failed to decrypt error response:", decErr.message);
@@ -298,7 +298,6 @@ async function sendRes(req, res, next) {
     );
     
     const response = await sendReq(encryptedData, result,keyENC1); // Get the actual response from sendReq
-     console.log('[VAHAN DL] Response received>>>>>>>>>>:', response)
     console.log('[VAHAN DL] Response received:', response ? 'Yes' : 'No');
 
     // Save driver data to database if response is successful

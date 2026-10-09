@@ -250,7 +250,7 @@ async function sendReq(encryptedData, result, keyENC1) {
           error.response.data.data,
           error.response.data.hash
         );
-        console.log("encDataFuciton error response:", responseData);
+        console.log("[VAHAN RC] error response received (body not logged — contains personal data)");
         return responseData;
       } catch (decErr) {
         console.error("Failed to decrypt error response:", decErr.message);
@@ -286,7 +286,6 @@ async function sendRes(req, res, next) {
       JSON.stringify(plainText)
     );
     const response = await sendReq(encryptedData, result, keyENC1); // Get the actual response from sendReq
-    console.log("[VAHAN RC] Decrypted response:", response);
     // Save vehicle data to database if response is successful
     if (response) {
       const savedVehicle = await saveVehicleData(response);

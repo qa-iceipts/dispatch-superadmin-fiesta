@@ -7,6 +7,7 @@ const { resolveTenantEntitlement, meterUsage, meterDbSearch } = require("../midd
 const vahanController = require("../controllers/vahan.controller");
 const sendResVehicle = require("../services/vahanApis/rcEnc"); // POST /validate-vehicle
 const sendResDL = require("../services/vahanApis/enc"); // POST /validate-dl
+const surepass = require("../services/surepass.service");
 
 // All VAHAN routes are server-to-server (product backends) — require apiKey.
 router.use(apiKeyAuth);
@@ -48,6 +49,21 @@ router.post(
   resolveTenantEntitlement,
   meterUsage("VAHAN_DL"),
   PromiseHandler(sendResDL)
+);
+
+// SurePass — same paths as GVPR/GRM transport, so products can switch over by
+// changing the base URL. Gated + metered like the Protean calls.
+router.post(
+  "/vehicle-rc-surepass",
+  resolveTenantEntitlement,
+  meterUsage("SUREPASS_RC"),
+  PromiseHandler(surepass.getVehicleRc)
+);
+router.post(
+  "/driver-dl-surepass",
+  resolveTenantEntitlement,
+  meterUsage("SUREPASS_DL"),
+  PromiseHandler(surepass.getDriverDl)
 );
 
 // Save to local cache.

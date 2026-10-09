@@ -6,6 +6,12 @@
 const db = require("../models");
 const { Op, fn, col, literal } = require("sequelize");
 const { deriveGovApiAccess } = require("../services/entitlement.service");
+const { VAHAN_API_TYPES } = require("../services/vahanStats.service");
+
+/** { VAHAN_RC: 0, VAHAN_DL: 0, SUREPASS_RC: 0, ... } so every API always shows up. */
+function emptyVahanCounts() {
+  return Object.fromEntries(VAHAN_API_TYPES.map((t) => [t, 0]));
+}
 
 function daysAgo(n) {
   const d = new Date();
@@ -179,6 +185,88 @@ module.exports = {
         total,
         byType: byType.map((r) => ({ type: r.type, count: Number(r.count) })),
         byDay: byDay.map((r) => ({ day: r.day, count: Number(r.count) })),
+      },
+    });
+  },
+
+  /**
+   * GET /admin/vahan/stats?from&to&productId&tenantId — call counts for every
+   * VAHAN-family API (Protean + SurePass + local DB searches): totals, per
+   * calling product, and per month. `providerMonthly` is the global monthly
+   * counter (vahanApiStats), bumped only when a provider lookup was saved —
+   * use it to reconcile against Protean/SurePass invoices.
+   */
+  getVahanStats: async (req, res) => {
+    const { from, to, productId, tenantId } = req.query;
+    const where = { type: VAHAN_API_TYPES };
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt[Op.gte] = new Date(from);
+      if (to) where.createdAt[Op.lte] = new Date(to);
+    }
+    if (productId) where.productId = productId;
+    if (tenantId) where.tenantId = tenantId;
+
+    const monthExpr = fn("DATE_FORMAT", col("createdAt"), "%Y-%m");
+    const [byProductType, byMonthType, products, providerMonthly] =
+      await Promise.all([
+        db.usageEvent.findAll({
+          attributes: ["productId", "type", [fn("COUNT", col("id")), "count"]],
+          where,
+          group: ["productId", "type"],
+          raw: true,
+        }),
+        db.usageEvent.findAll({
+          attributes: [[monthExpr, "month"], "type", [fn("COUNT", col("id")), "count"]],
+          where,
+          group: [monthExpr, "type"],
+          order: [[literal("month"), "DESC"]],
+          raw: true,
+        }),
+        db.product.findAll({ attributes: ["id", "name"], raw: true }),
+        db.vahanApiStats.findAll({
+          order: [["year", "DESC"], ["month", "DESC"]],
+          limit: 24,
+          raw: true,
+        }),
+      ]);
+
+    const productName = Object.fromEntries(products.map((p) => [p.id, p.name]));
+    const totals = emptyVahanCounts();
+    const byProductMap = {};
+    for (const r of byProductType) {
+      const c = Number(r.count);
+      totals[r.type] += c;
+      const row =
+        byProductMap[r.productId] ||
+        (byProductMap[r.productId] = {
+          productId: r.productId,
+          name: productName[r.productId] || r.productId,
+          total: 0,
+          byApi: emptyVahanCounts(),
+        });
+      row.byApi[r.type] = c;
+      row.total += c;
+    }
+
+    const byMonthMap = {};
+    for (const r of byMonthType) {
+      const row =
+        byMonthMap[r.month] ||
+        (byMonthMap[r.month] = { month: r.month, total: 0, byApi: emptyVahanCounts() });
+      const c = Number(r.count);
+      row.byApi[r.type] = c;
+      row.total += c;
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        total: Object.values(totals).reduce((s, c) => s + c, 0),
+        byApi: totals,
+        byProduct: Object.values(byProductMap).sort((a, b) => b.total - a.total),
+        byMonth: Object.values(byMonthMap),
+        providerMonthly,
       },
     });
   },
